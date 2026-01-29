@@ -11,6 +11,7 @@ using Nethermind.Db.Rocks.Config;
 using Nethermind.Init.Modules;
 using Nethermind.Config;
 using Nethermind.Logging;
+using Nethermind.Network;
 using Nethermind.State;
 using Nethermind.State.Flat;
 using Nethermind.State.Flat.Persistence;
@@ -37,6 +38,12 @@ public class DevPluginModule() : Module
         builder.AddDecorator<IBlockTree, ModdedBlockTree>();
         builder.AddDecorator<IBlockProcessor, ExitOnAnyExceptionBlockProcessor>();
         builder.AddStep(typeof(GitBisectExitOnInvalidBlock));
+
+        // Shared filesystem node discovery
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SHARED_NODES_DIR")))
+        {
+            builder.AddStep(typeof(SharedNodeDiscoveryStep));
+        }
 
         // Override IBlockhashProvider to eliminate temporary array race condition
         builder.AddScoped<IBlockhashProvider, DirectCacheBlockhashProvider>();
