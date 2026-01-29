@@ -109,4 +109,62 @@ public class SharedNodeDiscovery(
         _ = HeartbeatLoopAsync(linkedCts.Token);
         _ = ScanLoopAsync(linkedCts.Token);
     }
+
+    private async Task HeartbeatLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(HeartbeatInterval);
+
+        // Write immediately on start
+        WriteOwnFile();
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                WriteOwnFile();
+            }
+        }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            DeleteOwnFile();
+        }
+    }
+
+    private void WriteOwnFile()
+    {
+        if (_ownFilePath is null || _ownEnode is null)
+            return;
+
+        try
+        {
+            var content = new NodeFileContent(_ownEnode, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            var json = JsonSerializer.Serialize(content);
+            File.WriteAllText(_ownFilePath, json);
+            _logger.Debug("Heartbeat updated");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"Failed to write own node file: {ex.Message}");
+        }
+    }
+
+    private void DeleteOwnFile()
+    {
+        if (_ownFilePath is null)
+            return;
+
+        try
+        {
+            if (File.Exists(_ownFilePath))
+            {
+                File.Delete(_ownFilePath);
+                _logger.Info("Deleted own node file on shutdown");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"Failed to delete own node file: {ex.Message}");
+        }
+    }
 }
