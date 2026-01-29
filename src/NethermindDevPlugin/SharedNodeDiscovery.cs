@@ -167,4 +167,100 @@ public class SharedNodeDiscovery(
             _logger.Warn($"Failed to delete own node file: {ex.Message}");
         }
     }
+
+    private async Task ScanLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(HeartbeatInterval);
+
+        // Scan immediately on start
+        await ScanDirectoryAsync();
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await ScanDirectoryAsync();
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task ScanDirectoryAsync()
+    {
+        if (!Directory.Exists(sharedNodesDir))
+        {
+            _logger.Warn($"Shared nodes directory not accessible: {sharedNodesDir}");
+            return;
+        }
+
+        var ownPublicKey = rlpxHost.LocalNodeId.ToString(false);
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var seenEnodes = new HashSet<string>();
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(sharedNodesDir, "*.json"))
+            {
+                var fileName = Path.GetFileNameWithoutExtension(file);
+
+                // Skip own file
+                if (fileName.Equals(ownPublicKey, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    var json = await File.ReadAllTextAsync(file);
+                    var content = JsonSerializer.Deserialize<NodeFileContent>(json);
+
+                    if (content is null || string.IsNullOrEmpty(content.Enode))
+                        continue;
+
+                    // Check TTL
+                    if (now - content.LastSeen > (long)StaleTtl.TotalSeconds)
+                    {
+                        _logger.Debug($"Skipping stale node file: {fileName}");
+                        continue;
+                    }
+
+                    seenEnodes.Add(content.Enode);
+
+                    if (!_addedEnodes.Contains(content.Enode))
+                    {
+                        if (await staticNodesManager.AddAsync(content.Enode, updateFile: false))
+                        {
+                            _addedEnodes.Add(content.Enode);
+                            _logger.Info($"Discovered new node: {content.Enode}");
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    _logger.Debug($"Failed to parse node file {file}: {ex.Message}");
+                }
+                catch (IOException ex)
+                {
+                    _logger.Debug($"Failed to read node file {file}: {ex.Message}");
+                }
+            }
+
+            // Remove nodes that are no longer present or stale
+            foreach (var enode in _addedEnodes.ToList())
+            {
+                if (!seenEnodes.Contains(enode))
+                {
+                    if (await staticNodesManager.RemoveAsync(enode, updateFile: false))
+                    {
+                        _addedEnodes.Remove(enode);
+                        _logger.Info($"Removed stale node: {enode}");
+                    }
+                }
+            }
+
+            _logger.Debug($"Scanned {seenEnodes.Count} node files");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn($"Error scanning shared nodes directory: {ex.Message}");
+        }
+    }
 }
