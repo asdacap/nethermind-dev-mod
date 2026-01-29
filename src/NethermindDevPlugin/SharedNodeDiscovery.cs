@@ -71,4 +71,42 @@ public class SharedNodeDiscovery(
 
         return (addrUint & mask) == (networkUint & mask);
     }
+
+    public void Start()
+    {
+        IPAddress ip;
+        if (!string.IsNullOrEmpty(subnetCidr))
+        {
+            var resolved = ResolveIpForSubnet(subnetCidr);
+            if (resolved is null)
+            {
+                _logger.Error($"No interface found matching subnet {subnetCidr}. Shared node discovery disabled.");
+                return;
+            }
+            ip = resolved;
+        }
+        else
+        {
+            ip = ipResolver.LocalIp;
+        }
+
+        var publicKey = rlpxHost.LocalNodeId.ToString(false);
+        var port = rlpxHost.LocalPort;
+        _ownEnode = $"enode://{publicKey}@{ip}:{port}";
+        _ownFilePath = Path.Combine(sharedNodesDir, $"{publicKey}.json");
+
+        _logger.Info($"Shared node discovery enabled at {sharedNodesDir}");
+        _logger.Info($"Own enode: {_ownEnode}");
+
+        if (!Directory.Exists(sharedNodesDir))
+        {
+            _logger.Warn($"Shared nodes directory does not exist: {sharedNodesDir}");
+            return;
+        }
+
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, processExitSource.Token);
+
+        _ = HeartbeatLoopAsync(linkedCts.Token);
+        _ = ScanLoopAsync(linkedCts.Token);
+    }
 }
