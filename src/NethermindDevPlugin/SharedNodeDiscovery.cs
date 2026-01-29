@@ -110,6 +110,12 @@ public class SharedNodeDiscovery(
         _ = ScanLoopAsync(linkedCts.Token);
     }
 
+    public void Stop()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+
     private async Task HeartbeatLoopAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(HeartbeatInterval);
