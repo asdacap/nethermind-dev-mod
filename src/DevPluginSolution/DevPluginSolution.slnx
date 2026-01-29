@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../Nethermind/src/Nethermind/Nethermind.Init/Nethermind.Init.csproj" />
+  <Project Path="../NethermindDevPlugin/NethermindDevPlugin.csproj" />
+</Solution>
