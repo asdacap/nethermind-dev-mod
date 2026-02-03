@@ -39,12 +39,6 @@ public class DevPluginModule() : Module
         builder.AddDecorator<IBlockProcessor, ExitOnAnyExceptionBlockProcessor>();
         builder.AddStep(typeof(GitBisectExitOnInvalidBlock));
 
-        // Shared filesystem node discovery
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("SHARED_NODES_DIR")))
-        {
-            builder.AddStep(typeof(SharedNodeDiscoveryStep));
-        }
-
         // Override IBlockhashProvider to eliminate temporary array race condition
         builder.AddScoped<IBlockhashProvider, DirectCacheBlockhashProvider>();
 

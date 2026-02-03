@@ -1,0 +1,22 @@
+# P2P Server Cluster Configuration
+# Copy to ~/nethermindstaticnodes/cluster.conf and edit
+
+# Nethermind source repository (will be built on start)
+NETHERMIND_REPO="$HOME/repo/nethermind"
+
+# Lighthouse binary path
+LIGHTHOUSE_BIN="/mnt/fastworkscratch4/lighthouse-mainnet/lighthouse"
+
+# Nix flake for dotnet SDK
+DOTNET_FLAKE="$HOME/repo/dotfiles/flakes/dotnet"
+
+# Shared node registry directory (can be on network storage)
+# Only contains small JSON files for node discovery
+SHARED_NODES_DIR="$HOME/nethermindstaticnodes/shared"
+
+# Local data directory (must be local/fast storage)
+# Contains node data, backups, binaries, logs
+DATA_DIR="$HOME/nethermindstaticnodes"
+
+# Default backup path for data copy (reflink-enabled filesystem)
+BACKUP_PATH="/mnt/workspace/nethermind_mainnet_bak_with_headers"
