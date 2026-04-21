@@ -22,6 +22,15 @@ public class GitBisectExitOnInvalidBlock(
             processExitSource.Exit(10);
         };
 
+        mainProcessingContext.BlockProcessingQueue.BlockRemoved += (sender, args) =>
+        {
+            if (args.ProcessingResult == ProcessingResult.Exception)
+            {
+                logManager.GetClassLogger<GitBisectExitOnInvalidBlock>().Error($"Exiting on block processing exception: {args.Exception}");
+                processExitSource.Exit(10);
+            }
+        };
+
         return Task.CompletedTask;
     }
 }

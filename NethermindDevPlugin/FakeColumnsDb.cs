@@ -22,6 +22,10 @@ public class FakeColumnsDb<T>(
         }
     }
 
+    public void Clear()
+    {
+    }
+
     public void Dispose()
     {
     }
@@ -48,6 +52,10 @@ public class FakeColumnsDb<T>(
     private class FakeWriteBatch : IColumnsWriteBatch<T>
     {
         private Dictionary<T, IWriteBatch> _innerWriteBatch;
+
+        public void Clear()
+        {
+        }
 
         public FakeWriteBatch(Dictionary<T, IDb> innerDb)
         {

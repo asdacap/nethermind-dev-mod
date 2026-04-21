@@ -7,7 +7,7 @@ using Nethermind.Logging;
 
 namespace NethermindDevPlugin;
 
-public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): IBlockTree
+public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): IBlockTree, IBlockTreeHealer
 {
     ILogger _logger = logManager.GetClassLogger<ModdedBlockTree>();
     
@@ -205,10 +205,11 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         baseBlockTree.UpdateBeaconMainChain(blockInfos, clearBeaconMainChainStartPoint);
     }
 
-    public void RecalculateTreeLevels()
-    {
+    public void RecalculateTreeLevels() =>
         baseBlockTree.RecalculateTreeLevels();
-    }
+
+    public void HealCanonicalChain(Hash256 startHash, long maxBlockDepth) =>
+        ((IBlockTreeHealer)baseBlockTree).HealCanonicalChain(startHash, maxBlockDepth);
 
     public ulong NetworkId => baseBlockTree.NetworkId;
 

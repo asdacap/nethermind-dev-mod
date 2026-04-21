@@ -8,6 +8,12 @@ namespace NethermindDevPlugin;
 
 public class ExitOnAnyExceptionBlockProcessor(IBlockProcessor baseBlockProcessor, IProcessExitSource exitSource) : IBlockProcessor
 {
+    public event Action? TransactionsExecuted
+    {
+        add => baseBlockProcessor.TransactionsExecuted += value;
+        remove => baseBlockProcessor.TransactionsExecuted -= value;
+    }
+
     public (Block Block, TxReceipt[] Receipts) ProcessOne(Block suggestedBlock, ProcessingOptions options,
         IBlockTracer blockTracer, IReleaseSpec spec, CancellationToken token = new CancellationToken())
     {
