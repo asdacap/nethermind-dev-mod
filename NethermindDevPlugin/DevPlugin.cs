@@ -38,6 +38,9 @@ public class DevPluginModule() : Module
         builder.AddDecorator<IBlockTree, ModdedBlockTree>();
         builder.AddDecorator<IBlockProcessor, ExitOnAnyExceptionBlockProcessor>();
         builder.AddStep(typeof(GitBisectExitOnInvalidBlock));
+        builder.AddStep(typeof(RuntimeMetricsStep));
+        // Disabled — breaks forward sync.
+        // builder.AddStep(typeof(DisabledReviewBlockTree));
 
         // Override IBlockhashProvider to eliminate temporary array race condition
         builder.AddScoped<IBlockhashProvider, DirectCacheBlockhashProvider>();

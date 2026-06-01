@@ -38,8 +38,10 @@ function build {
   cp -avf $ORI_BIN $BINDIR
 
   cp $SCRIPT_DIR/../../NethermindClusterPlugin/bin/Release/net10.0/NethermindClusterPlugin.dll $BINDIR/plugins/
-
-  #cp $SCRIPT_DIR/../../NethermindDevPlugin/bin/Release/net10.0/NethermindDevPlugin.dll $BINDIR/plugins/
+  cp $SCRIPT_DIR/../../NethermindDevPlugin/bin/Release/net10.0/NethermindDevPlugin.dll $BINDIR/plugins/
+  # NethermindDevPlugin's package dep — Prometheus.DotNetRuntime — needs to land in the
+  # main bin so the runtime can resolve the type when DevPlugin loads.
+  cp $SCRIPT_DIR/../../NethermindDevPlugin/bin/Release/net10.0/prometheus-net.DotNetRuntime.dll $BINDIR/
 }
 
 function build_and_copy_rocksdb {
@@ -66,8 +68,8 @@ export SHARED_NODES_SUBNET="192.168.101.0/24"
 
 function run_in_scope {
   systemd-run --user --scope \
-    -p MemoryHigh=100G \
-    -p MemoryMax=100G \
+    -p MemoryHigh=48G \
+    -p MemoryMax=48G \
     -p "IOReadBandwidthMax=$IO_DEVICE 2000M" \
     -p "IOWriteBandwidthMax=$IO_DEVICE 2000M" \
     -p "IOReadIOPSMax=$IO_DEVICE 1000000" \
@@ -79,7 +81,6 @@ CMD_BASE="run_in_scope \
   $BINDIR/nethermind -dd $DBPATH \
   --JsonRpc.Enabled true \
   --JsonRpc.Port 8546 \
-  --EthStats.Enabled true \
   --Init.WebSocketsEnabled true \
   --JsonRpc.IpcUnixDomainSocketPath ${DBPATH}nm.ipc \
   --Metrics.Enabled true \
@@ -89,7 +90,7 @@ CMD_BASE="run_in_scope \
   --Metrics.ExposePort 9999 \
   --Metrics.DbMetricIntervalSeconds 5 \
   --Metrics.PauseDbMetricDuringBlockProcessing false \
-  --JsonRpc.JwtSecretFile=/mnt/fastworkscratch4/lighthouse-$NETWORK/jwtsecret \
+  --JsonRpc.JwtSecretFile=/mnt/workspace/lighthouse-$NETWORK/jwtsecret \
   --JsonRpc.EnabledModules Admin,Debug,Eth,PortalHistory,Rbuilder,Subscribe,Trace,Proof,Net \
   --Network.EnableUPnP true \
   --Db.EnableDbStatistics true \
@@ -289,13 +290,15 @@ function run_snap {
     rm -r $DBPATH || true
     #cp -av /mnt/workspace/nethermind_mainnet_halfpath_april_15/ $DBPATH
 
-    $CMD_SNAP
+    $CMD_SNAP  --Sync.ExitOnSynced true
 }
+
+#run_snap
 
 function run_flat_snap {
 
     build
-    rm -r $DBPATH || true
+    #rm -r $DBPATH || true
 
     $CMD_SNAP --FlatDb.Enabled true
 }
@@ -406,23 +409,33 @@ function flat_replay_genesis {
 
 EXIT_BLOCK_NUMBER=33500000
 
-function flat_replay {
-  build
+function flat_replay_persisted_snapshot {
   rm -r $DBPATH || true
-  cp -av $1 $DBPATH
+  cp -a $1 $DBPATH
 
   shift
 
-  echo "Clearing cache.."
-  sudo /nix/store/16npdypxihn91bg2ng9dwx5rq77p89gz-clear-ram-cache/bin/clear-ram-cache
+  CLEAR_CACHE="$(readlink -f "$(command -v clear-ram-cache)")"
+  echo "Clearing cache.. $CLEAR_CACHE"
+  sudo "$CLEAR_CACHE"
   echo "Cleared"
   SKIP_PREWARM_TX=0 BAL_PATH=/mnt/workspace/recordedbal/ BAL_REPLAY=1 $CMD_FULL_GENESIS  \
     --Era.ImportBlocksBufferSize 4096 \
-    --FlatDb.VerifyWithTrie false \
-    --FlatDb.ImportFromPruningTrieState true \
     --Init.ExitOnBlockNumber $EXIT_BLOCK_NUMBER \
+    --BalRecorder.ReplayEnabled false \
+    --BalRecorder.Path /mnt/workspace/recordedbal/ \
+    --FlatDb.EnableLongFinality true \
+    --FlatDb.PersistedSnapshotMaxCompactSize 1048576 \
+    --FlatDb.PersistedSnapshotMaxCompactedSourceBytes 68719476736 \
+    --FlatDb.LongFinalityReorgDepth 10000000 \
+    --FlatDb.CompactSize 32 \
     --FlatDb.Enabled true $@ \
     #--Era.ImportDirectory /mnt/large_workscratch/era-mainnet-19-dis-23mil_up/ \
+    #--FlatDb.ValidatePersistedSnapshot true \
+    #--FlatDb.ValidatePersistedSnapshot true \
+    #--FlatDb.ValidatePersistedSnapshot true \
+    #--BalRecorder.Path /mnt/workspace/recordedbal/ \
+    #--FlatDb.MaxInMemoryReorgDepth 128 \
     #--FlatDb.TrieCacheMemoryBudget 1000000000 \
     #--FlatDb.TrieCacheMemoryBudget 2000000000 \
     #--FlatDb.CompactSize 64 \
@@ -441,6 +454,45 @@ function flat_replay {
 
 }
 
+function flat_replay {
+  rm -r $DBPATH || true
+  cp -av $1 $DBPATH
+
+  shift
+
+  CLEAR_CACHE="$(readlink -f "$(command -v clear-ram-cache)")"
+  echo "Clearing cache.. $CLEAR_CACHE"
+  sudo "$CLEAR_CACHE"
+  echo "Cleared"
+  $CMD_FULL_GENESIS  \
+    --FlatDb.ImportFromPruningTrieState true \
+    --Era.ImportBlocksBufferSize 4096 \
+    --Init.ExitOnBlockNumber $EXIT_BLOCK_NUMBER \
+    --FlatDb.Enabled true $@ 
+}
+
+function flat_bal_replay {
+  rm -r $DBPATH || true
+  cp -av $1 $DBPATH
+
+  shift
+
+  CLEAR_CACHE="$(readlink -f "$(command -v clear-ram-cache)")"
+  echo "Clearing cache.. $CLEAR_CACHE"
+  sudo "$CLEAR_CACHE"
+  echo "Cleared"
+  $CMD_FULL_GENESIS  \
+    --Era.ImportBlocksBufferSize 4096 \
+    --BalRecorder.ReplayEnabled true \
+    --BalRecorder.RecordingEnabled true \
+    --BalRecorder.Path /mnt/workspace/recordedbal/ \
+    --Init.ExitOnBlockNumber $EXIT_BLOCK_NUMBER \
+    --FlatDb.Enabled true $@ 
+    #--BalRecorder.RecordingEnabled true \
+}
+
+#flat_bal_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/
+
 function run_halfpath {
 
     build
@@ -450,6 +502,37 @@ function run_halfpath {
     BAL_PATH=/mnt/workspace/recordedbal/ BAL_REPLAY=1 $CMD_SNAP
 }
 
-#flat_replay /mnt/workspace/nethermind_mainnet_flat_9mac_headers/
 
-run_halfpath
+
+EXIT_BLOCK_NUMBER=23500000
+
+
+EXIT_BLOCK_NUMBER=23550000
+
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000000  || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ || true
+
+# Should be 30 minute
+# 30 minute every 50k
+
+EXIT_BLOCK_NUMBER=23450000
+
+
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 300  || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 4096  || true
+
+EXIT_BLOCK_NUMBER=23550000
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 16000  || true
+
+EXIT_BLOCK_NUMBER=23600000
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000  || true
+
+EXIT_BLOCK_NUMBER=236000000
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000000  || true
+
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_ps90k/ --FlatDb.MinReorgDepth 90000  || true
+
+EXIT_BLOCK_NUMBER=236000000
+flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ || true
+

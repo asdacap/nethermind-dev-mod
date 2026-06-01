@@ -200,7 +200,7 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         return baseBlockTree.IsBetterThanHead(header);
     }
 
-    public void UpdateBeaconMainChain(BlockInfo[]? blockInfos, long clearBeaconMainChainStartPoint)
+    public void UpdateBeaconMainChain(IReadOnlyList<BlockInfo>? blockInfos, long clearBeaconMainChainStartPoint)
     {
         baseBlockTree.UpdateBeaconMainChain(blockInfos, clearBeaconMainChainStartPoint);
     }
