@@ -232,7 +232,7 @@ public class SharedNodeDiscovery(
 
                     if (!_addedEnodes.Contains(content.Enode))
                     {
-                        if (await staticNodesManager.AddAsync(content.Enode, updateFile: false))
+                        if (await staticNodesManager.AddAsync(new NetworkNode(content.Enode), updateFile: false))
                         {
                             _addedEnodes.Add(content.Enode);
                             _logger.Info($"Discovered new node: {content.Enode}");
@@ -254,7 +254,7 @@ public class SharedNodeDiscovery(
             {
                 if (!seenEnodes.Contains(enode))
                 {
-                    if (await staticNodesManager.RemoveAsync(enode, updateFile: false))
+                    if (await staticNodesManager.RemoveAsync(new NetworkNode(enode), updateFile: false))
                     {
                         _addedEnodes.Remove(enode);
                         _logger.Info($"Removed stale node: {enode}");
