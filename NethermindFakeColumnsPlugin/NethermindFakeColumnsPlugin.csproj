@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>Nethermind.FakeColumns</RootNamespace>
+        <!-- Copy package transitive assemblies (e.g. prometheus-net) into bin/
+             so they can be deployed next to the plugin DLL by build.sh. -->
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="prometheus-net" Version="8.2.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../nethermind/src/Nethermind/Nethermind.Api/Nethermind.Api.csproj" />
+        <ProjectReference Include="../../nethermind/src/Nethermind/Nethermind.Init/Nethermind.Init.csproj" />
+        <ProjectReference Include="../../nethermind/src/Nethermind/Nethermind.State.Pbt/Nethermind.State.Pbt.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="out\" />
+    </ItemGroup>
+
+</Project>

@@ -11,32 +11,32 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
 {
     ILogger _logger = logManager.GetClassLogger<ModdedBlockTree>();
     
-    public Block? FindBlock(Hash256 blockHash, BlockTreeLookupOptions options, long? blockNumber = null)
+    public Block? FindBlock(Hash256 blockHash, BlockTreeLookupOptions options, ulong? blockNumber = null)
     {
         return baseBlockTree.FindBlock(blockHash, options, blockNumber);
     }
 
-    public Block? FindBlock(long blockNumber, BlockTreeLookupOptions options)
+    public Block? FindBlock(ulong blockNumber, BlockTreeLookupOptions options)
     {
         return baseBlockTree.FindBlock(blockNumber, options);
     }
 
-    public bool HasBlock(long blockNumber, Hash256 blockHash)
+    public bool HasBlock(ulong blockNumber, Hash256 blockHash)
     {
         return baseBlockTree.HasBlock(blockNumber, blockHash);
     }
 
-    public BlockHeader? FindHeader(Hash256 blockHash, BlockTreeLookupOptions options, long? blockNumber = null)
+    public BlockHeader? FindHeader(Hash256 blockHash, BlockTreeLookupOptions options, ulong? blockNumber = null)
     {
         return baseBlockTree.FindHeader(blockHash, options, blockNumber);
     }
 
-    public BlockHeader? FindHeader(long blockNumber, BlockTreeLookupOptions options)
+    public BlockHeader? FindHeader(ulong blockNumber, BlockTreeLookupOptions options)
     {
         return baseBlockTree.FindHeader(blockNumber, options);
     }
 
-    public Hash256? FindBlockHash(long blockNumber)
+    public Hash256? FindBlockHash(ulong blockNumber)
     {
         return baseBlockTree.FindBlockHash(blockNumber);
     }
@@ -56,7 +56,7 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         return baseBlockTree.FindBestSuggestedHeader();
     }
 
-    public long GetLowestBlock()
+    public ulong GetLowestBlock()
     {
         return baseBlockTree.GetLowestBlock();
     }
@@ -72,12 +72,6 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
     public Hash256? SafeHash => baseBlockTree.SafeHash;
 
     public Block? Head => baseBlockTree.Head;
-
-    public long? BestPersistedState
-    {
-        get => baseBlockTree.BestPersistedState;
-        set => baseBlockTree.BestPersistedState = value;
-    }
 
     public AddBlockResult Insert(BlockHeader header, BlockTreeInsertHeaderOptions headerOptions = BlockTreeInsertHeaderOptions.None)
     {
@@ -100,7 +94,7 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         baseBlockTree.UpdateHeadBlock(blockHash);
     }
 
-    public void NewOldestBlock(long oldestBlock)
+    public void NewOldestBlock(ulong oldestBlock)
     {
         baseBlockTree.NewOldestBlock(oldestBlock);
     }
@@ -120,24 +114,24 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         return baseBlockTree.SuggestHeader(header);
     }
 
-    public bool IsKnownBlock(long number, Hash256 blockHash)
+    public bool IsKnownBlock(ulong number, Hash256 blockHash)
     {
         return baseBlockTree.IsKnownBlock(number, blockHash);
     }
 
-    public bool IsKnownBeaconBlock(long number, Hash256 blockHash)
+    public bool IsKnownBeaconBlock(ulong number, Hash256 blockHash)
     {
         return baseBlockTree.IsKnownBeaconBlock(number, blockHash);
     }
 
-    public bool WasProcessed(long number, Hash256 blockHash)
+    public bool WasProcessed(ulong number, Hash256 blockHash)
     {
         return baseBlockTree.WasProcessed(number, blockHash);
     }
 
-    public void UpdateMainChain(IReadOnlyList<Block> blocks, bool wereProcessed, bool forceHeadBlock = false)
+    public bool TryUpdateMainChain(BlockHeader newHead, bool wereProcessed, bool forceUpdateHeadBlock = false, params ReadOnlySpan<Block> preloadedBlocks)
     {
-        baseBlockTree.UpdateMainChain(blocks, wereProcessed, forceHeadBlock);
+        return baseBlockTree.TryUpdateMainChain(newHead, wereProcessed, forceUpdateHeadBlock, preloadedBlocks);
     }
 
     public void MarkChainAsProcessed(IReadOnlyList<Block> blocks)
@@ -150,22 +144,22 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         return baseBlockTree.Accept(blockTreeVisitor, cancellationToken);
     }
 
-    public (BlockInfo? Info, ChainLevelInfo? Level) GetInfo(long number, Hash256 blockHash)
+    public (BlockInfo? Info, ChainLevelInfo? Level) GetInfo(ulong number, Hash256 blockHash)
     {
         return baseBlockTree.GetInfo(number, blockHash);
     }
 
-    public ChainLevelInfo? FindLevel(long number)
+    public ChainLevelInfo? FindLevel(ulong number)
     {
         return baseBlockTree.FindLevel(number);
     }
 
-    public BlockInfo FindCanonicalBlockInfo(long blockNumber)
+    public BlockInfo FindCanonicalBlockInfo(ulong blockNumber)
     {
         return baseBlockTree.FindCanonicalBlockInfo(blockNumber);
     }
 
-    public Hash256? FindHash(long blockNumber)
+    public Hash256? FindHash(ulong blockNumber)
     {
         return baseBlockTree.FindHash(blockNumber);
     }
@@ -180,7 +174,12 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         _logger.Warn("Invalid block deletion skipped");
     }
 
-    public void DeleteOldBlock(long blockNumber, Hash256 blockHash)
+    public void ReportBadBlock(Block badBlock)
+    {
+        _logger.Warn($"Bad block reporting skipped: {badBlock.ToString(Block.Format.Short)}");
+    }
+
+    public void DeleteOldBlock(ulong blockNumber, Hash256 blockHash)
     {
         baseBlockTree.DeleteOldBlock(blockNumber, blockHash);
     }
@@ -190,7 +189,9 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         baseBlockTree.ForkChoiceUpdated(finalizedBlockHash, safeBlockBlockHash);
     }
 
-    public int DeleteChainSlice(in long startNumber, long? endNumber = null, bool force = false)
+    public ulong LastFinalizedBlockLevel => baseBlockTree.LastFinalizedBlockLevel;
+
+    public int DeleteChainSlice(in ulong startNumber, ulong? endNumber = null, bool force = false)
     {
         return baseBlockTree.DeleteChainSlice(in startNumber, endNumber, force);
     }
@@ -200,7 +201,7 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         return baseBlockTree.IsBetterThanHead(header);
     }
 
-    public void UpdateBeaconMainChain(IReadOnlyList<BlockInfo>? blockInfos, long clearBeaconMainChainStartPoint)
+    public void UpdateBeaconMainChain(IReadOnlyList<BlockInfo>? blockInfos, ulong clearBeaconMainChainStartPoint)
     {
         baseBlockTree.UpdateBeaconMainChain(blockInfos, clearBeaconMainChainStartPoint);
     }
@@ -235,13 +236,13 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
         set => baseBlockTree.LowestInsertedBeaconHeader = value;
     }
 
-    public long BestKnownNumber => baseBlockTree.BestKnownNumber;
+    public ulong BestKnownNumber => baseBlockTree.BestKnownNumber;
 
-    public long BestKnownBeaconNumber => baseBlockTree.BestKnownBeaconNumber;
+    public ulong BestKnownBeaconNumber => baseBlockTree.BestKnownBeaconNumber;
 
     public bool CanAcceptNewBlocks => baseBlockTree.CanAcceptNewBlocks;
 
-    public (long BlockNumber, Hash256 BlockHash) SyncPivot
+    public (ulong BlockNumber, Hash256 BlockHash) SyncPivot
     {
         get => baseBlockTree.SyncPivot;
         set => baseBlockTree.SyncPivot = value;
@@ -251,6 +252,12 @@ public class ModdedBlockTree(IBlockTree baseBlockTree, ILogManager logManager): 
     {
         get => baseBlockTree.IsProcessingBlock;
         set => baseBlockTree.IsProcessingBlock = value;
+    }
+
+    public event EventHandler<FinalizeEventArgs>? BlocksFinalized
+    {
+        add => baseBlockTree.BlocksFinalized += value;
+        remove => baseBlockTree.BlocksFinalized -= value;
     }
 
     public event EventHandler<BlockEventArgs>? NewBestSuggestedBlock

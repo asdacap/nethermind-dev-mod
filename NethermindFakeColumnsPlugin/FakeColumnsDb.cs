@@ -8,7 +8,7 @@ using Nethermind.Core;
 using Nethermind.Db;
 using Prometheus;
 
-namespace NethermindDevPlugin;
+namespace Nethermind.FakeColumns;
 
 public class FakeColumnsDb<T>(
     Dictionary<T, IDb> innerDb

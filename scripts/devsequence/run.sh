@@ -13,6 +13,7 @@ fi
 cd "$REPO_DIR"
 
 NETWORK=mainnet
+#NETWORK=chiado
 #DBPATH="/mnt/fastworkscratch4/nethermind_$NETWORK/"
 DBPATH="/mnt/workspace/nethermind_$NETWORK/"
 
@@ -34,14 +35,14 @@ function build {
   dotnet build -c $MODE src/Nethermind/Nethermind.Runner/Nethermind.Runner.csproj
   #dotnet build -c Debug src/Nethermind/Nethermind.Runner/Nethermind.Runner.csproj
 
+  rm -r $BINDIR/plugins
   mkdir -p $BINDIR/plugins
   cp -avf $ORI_BIN $BINDIR
 
   cp $SCRIPT_DIR/../../NethermindClusterPlugin/bin/Release/net10.0/NethermindClusterPlugin.dll $BINDIR/plugins/
   cp $SCRIPT_DIR/../../NethermindDevPlugin/bin/Release/net10.0/NethermindDevPlugin.dll $BINDIR/plugins/
-  # NethermindDevPlugin's package dep — Prometheus.DotNetRuntime — needs to land in the
-  # main bin so the runtime can resolve the type when DevPlugin loads.
-  cp $SCRIPT_DIR/../../NethermindDevPlugin/bin/Release/net10.0/prometheus-net.DotNetRuntime.dll $BINDIR/
+  # Inert unless --FakeColumns.Enabled true (and --Pbt.Enabled true, since it overrides IColumnsDb<PbtColumns>).
+  cp $SCRIPT_DIR/../../NethermindFakeColumnsPlugin/bin/Release/net10.0/NethermindFakeColumnsPlugin.dll $BINDIR/plugins/
 }
 
 function build_and_copy_rocksdb {
@@ -68,8 +69,8 @@ export SHARED_NODES_SUBNET="192.168.101.0/24"
 
 function run_in_scope {
   systemd-run --user --scope \
-    -p MemoryHigh=48G \
-    -p MemoryMax=48G \
+    -p MemoryHigh=148G \
+    -p MemoryMax=148G \
     -p "IOReadBandwidthMax=$IO_DEVICE 2000M" \
     -p "IOWriteBandwidthMax=$IO_DEVICE 2000M" \
     -p "IOReadIOPSMax=$IO_DEVICE 1000000" \
@@ -113,8 +114,9 @@ CMD_BASE="run_in_scope \
   --Pruning.FullPruningMaxDegreeOfParallelism 32 \
   --Pruning.MaxBufferedCommitCount 128 \
   --Pruning.MaxUnpersistedBlockCount 30000000 \
+  --Sync.ForwardSyncDownloadBufferMemoryBudget 1000000000 \
+  --Init.LogRules=State.Flat.PersistenceManager:Info; \
   --Network.OnlyStaticPeers false \
-  --Blocks.PreWarmStateOnBlockProcessing true \
   -c ${NETWORK} \
   --Network.MaxActivePeers 50"
 
@@ -235,7 +237,7 @@ function era_export_full {
 
   build
 
-  $CMD_FULL --Era.ExportDirectory /mnt/large_workscratch/era-sepolia-23-sept/
+  $CMD_FULL --Era.ExportDirectory /mnt/large_workscratch/era-mainnet-16-june/
 }
 
 #run_full
@@ -298,29 +300,40 @@ function run_snap {
 function run_flat_snap {
 
     build
-    #rm -r $DBPATH || true
+    rm -r $DBPATH || true
+    #cp -av /mnt/workspace/nethermind_chiado_bak/ $DBPATH
 
     $CMD_SNAP --FlatDb.Enabled true
+
 }
 
-#run_flat_snap
+#run_flat_snap 
 
 function run_flat_full {
 
     build
     rm -r $DBPATH || true
-    #cp -av /mnt/workspace/nethermind_hoodi/ $DBPATH
+    cp -av /mnt/workspace/nethermind_mainnet_flat_snap_14_jul/ $DBPATH
 
-    $CMD_FULL_GENESIS --FlatDb.Enabled true
+    $CMD_FULL --FlatDb.Enabled true --Sync.AncientBodiesBarrier 1 --Sync.AncientReceiptsBarrier 1
 }
-
 #run_flat_full
+
+function pbt_thing {
+
+    build
+    rm -r $DBPATH || true
+    cp -av /mnt/workspace/nethermind_mainnet_flat_preimage_7_jul/ $DBPATH
+
+    $CMD_SNAP --Pbt.Enabled true --Pbt.ImportFromPreimageFlat true --FakeColumns.Enabled true --FlatDb.Layout PreimageFlat
+}
+pbt_thing 
 
 function run_full_genesis {
   build
   rm -r $DBPATH || true
   #cp -av /mnt/fastworkscratch4/nethermind_mainnet_archive_header_only/ $DBPATH
-  #cp -av /mnt/fastworkscratch4/nethermind_mainnet_archive_header_7/ $DBPATH
+
   #cp -av /mnt/fastworkscratch4/nethermind_mainnet_archive_flatcache_23m/ $DBPATH
   $CMD_FULL_GENESIS $@
 }
@@ -332,11 +345,11 @@ function era_from_genesis {
   build
   rm -r $DBPATH || true
 
-  $CMD_FULL_GENESIS --Era.ImportDirectory /mnt/large_workscratch/era-hoodi-march-2/ \
+  $CMD_FULL_GENESIS --Era.ImportDirectory /mnt/large_workscratch/era-mainnet-16-june/ \
     --Era.From 0 \
     --Era.Concurrency 1 \
     --Era.ImportBlocksBufferSize 100 \
-    --FlatDb.CompactSize 256 \
+    --FlatDb.CompactSize 32 \
     --FlatDb.Enabled true \
     $@ || true
 
@@ -381,7 +394,6 @@ function flat_import {
     --FlatDb.MinReorgDepth 128 \
     --FlatDb.MaxReorgDepth 256 \
     --FlatDb.ImportFromPruningTrieState true \
-    --Blocks.PreWarmStateOnBlockProcessing true \
     --FlatDb.Enabled true "$@"
 
   cp -av $DBPATH $TARGET
@@ -391,19 +403,18 @@ function flat_replay_genesis {
   rm -r $DBPATH || true
 
   $CMD_FULL_GENESIS  \
-    --Era.ImportBlocksBufferSize 4096 \
+    --StateDiffArchive.ReplayEnabled true --StateDiffArchive.ArchivePath /mnt/large_workscratch/state-diff-archive/ --FlatDb.TrieCacheMemoryBudget 4000000000 \
     --FlatDb.Layout Flat \
-    --FlatDb.VerifyWithTrie false \
-    --FlatDb.MinReorgDepth 128 \
-    --FlatDb.MaxReorgDepth 256 \
-    --FlatDb.ImportFromPruningTrieState true \
-    --FlatDb.EnablePreimageRecording true \
-    --Blocks.PreWarmStateOnBlockProcessing true \
-    --FlatDb.Enabled true \
-    --Era.ImportDirectory /mnt/large_workscratch/era-mainnet-27-jul/ \
-    --Init.ExitOnBlockNumber 1000000
+    --FlatDb.CompactSize 32 \
+    --FlatDb.Enabled true 
+    #--Era.ImportDirectory /mnt/large_workscratch/era-mainnet-16-june/ \
+    #--Era.From 0 \
+    #--Era.Concurrency 1 \
+    #--Era.ImportBlocksBufferSize 100 \
 
 }
+
+#flat_replay_genesis 
 
 #build
 
@@ -424,13 +435,13 @@ function flat_replay_persisted_snapshot {
     --Init.ExitOnBlockNumber $EXIT_BLOCK_NUMBER \
     --BalRecorder.ReplayEnabled false \
     --BalRecorder.Path /mnt/workspace/recordedbal/ \
+    --FlatDb.ValidatePersistedSnapshot false \
     --FlatDb.EnableLongFinality true \
-    --FlatDb.PersistedSnapshotMaxCompactSize 1048576 \
-    --FlatDb.PersistedSnapshotMaxCompactedSourceBytes 68719476736 \
-    --FlatDb.LongFinalityReorgDepth 10000000 \
     --FlatDb.CompactSize 32 \
     --FlatDb.Enabled true $@ \
     #--Era.ImportDirectory /mnt/large_workscratch/era-mainnet-19-dis-23mil_up/ \
+    #--FlatDb.PersistedSnapshotMaxCompactSize 1048576 \
+    #--FlatDb.MaxReorgDepth 10000000 \
     #--FlatDb.ValidatePersistedSnapshot true \
     #--FlatDb.ValidatePersistedSnapshot true \
     #--FlatDb.ValidatePersistedSnapshot true \
@@ -466,6 +477,7 @@ function flat_replay {
   echo "Cleared"
   $CMD_FULL_GENESIS  \
     --FlatDb.ImportFromPruningTrieState true \
+    --FlatDb.CompactSize 32 \
     --Era.ImportBlocksBufferSize 4096 \
     --Init.ExitOnBlockNumber $EXIT_BLOCK_NUMBER \
     --FlatDb.Enabled true $@ 
@@ -503,6 +515,7 @@ function run_halfpath {
 }
 
 
+#flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --Blocks.BlockStmEnabled true || true
 
 EXIT_BLOCK_NUMBER=23500000
 
@@ -515,24 +528,34 @@ EXIT_BLOCK_NUMBER=23550000
 # Should be 30 minute
 # 30 minute every 50k
 
-EXIT_BLOCK_NUMBER=23450000
-
+EXIT_BLOCK_NUMBER=23500000
 
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ || true
-#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 300  || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 300 || true
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 4096  || true
 
 EXIT_BLOCK_NUMBER=23550000
+EXIT_BLOCK_NUMBER=23500000
+
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 16000  || true
 
-EXIT_BLOCK_NUMBER=23600000
+EXIT_BLOCK_NUMBER=23650000
+#flat_bal_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000  || true
+
+#flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --StateDiffArchive.ReplayEnabled true --StateDiffArchive.ArchivePath /mnt/large_workscratch/state-diff-archive-full/ --FlatDb.TrieCacheMemoryBudget 4000000000|| true
+#flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --BalRecorder.ReplayEnabled true --BalRecorder.Path /mnt/workspace/recordedbal/ 
+#flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ 
 
 EXIT_BLOCK_NUMBER=236000000
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000000  || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 1024  || true
 
 #flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_ps90k/ --FlatDb.MinReorgDepth 90000  || true
 
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 16000 --DevPlugin.SimulatedReorgDepth 10000 --DevPlugin.SimulatedReorgMode Batch || true
+#flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/  || true
+
 EXIT_BLOCK_NUMBER=236000000
-flat_replay /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ || true
+#flat_replay_persisted_snapshot /mnt/workspace/nethermind_mainnet_flat_april_22_headers/ --FlatDb.MinReorgDepth 90000 --DevPlugin.SimulatedReorgDepth 64000 --DevPlugin.SimulatedReorgMode Batch || true
 

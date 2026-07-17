@@ -3,15 +3,15 @@ using Nethermind.Config;
 using Nethermind.Init.Steps;
 using Nethermind.Logging;
 using Nethermind.Network;
-using Nethermind.Network.Rlpx;
 
 namespace NethermindClusterPlugin;
 
 [RunnerStepDependencies(typeof(InitializeNetwork))]
 public class SharedNodeDiscoveryStep(
-    IRlpxHost rlpxHost,
+    IEnode enode,
     IIPResolver ipResolver,
     IStaticNodesManager staticNodesManager,
+    ITrustedNodesManager trustedNodesManager,
     IProcessExitSource processExitSource,
     ILogManager logManager) : IStep
 {
@@ -26,9 +26,10 @@ public class SharedNodeDiscoveryStep(
         var discovery = new SharedNodeDiscovery(
             sharedNodesDir,
             subnetCidr,
-            rlpxHost,
+            enode,
             ipResolver,
             staticNodesManager,
+            trustedNodesManager,
             processExitSource,
             logManager);
 

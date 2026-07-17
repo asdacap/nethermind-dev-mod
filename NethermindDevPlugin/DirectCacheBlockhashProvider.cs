@@ -23,36 +23,31 @@ public class DirectCacheBlockhashProvider(
     ILogManager? logManager)
     : IBlockhashProvider
 {
-    public const int MaxDepth = 256;
+    public const ulong MaxDepth = 256;
     private readonly IBlockhashStore _blockhashStore = new BlockhashStore(worldState);
     private readonly ILogger _logger = logManager?.GetClassLogger<DirectCacheBlockhashProvider>() ?? throw new ArgumentNullException(nameof(logManager));
 
-    public Hash256? GetBlockhash(BlockHeader currentBlock, long number, IReleaseSpec spec)
+    public Hash256? GetBlockhash(BlockHeader currentBlock, ulong number, IReleaseSpec spec)
     {
-        if (number < 0)
-        {
-            return ReturnOutOfBounds(currentBlock, number);
-        }
-
         // EIP-2935 path: blockhash stored in state
         if (spec.IsBlockHashInStateAvailable)
         {
             return _blockhashStore.GetBlockHashFromState(currentBlock, number, spec);
         }
 
-        long depth = currentBlock.Number - number;
+        ulong depth = currentBlock.Number - number;
 
         return depth switch
         {
-            <= 0 or > MaxDepth => ReturnOutOfBounds(currentBlock, number),
+            0 or > MaxDepth => ReturnOutOfBounds(currentBlock, number),
             1 => currentBlock.ParentHash,
             // Always use cache directly - no temporary array
-            _ => blockhashCache.GetHash(currentBlock, (int)depth)
+            _ => blockhashCache.GetHash(currentBlock, depth)
                  ?? throw new InvalidDataException("Hash cannot be found when executing BLOCKHASH operation")
         };
     }
 
-    private Hash256? ReturnOutOfBounds(BlockHeader currentBlock, long number)
+    private Hash256? ReturnOutOfBounds(BlockHeader currentBlock, ulong number)
     {
         if (_logger.IsTrace) _logger.Trace($"BLOCKHASH opcode returning null for {currentBlock.Number} -> {number}");
         return null;

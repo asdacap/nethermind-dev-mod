@@ -5,16 +5,16 @@ using System.Text.Json;
 using Nethermind.Config;
 using Nethermind.Logging;
 using Nethermind.Network;
-using Nethermind.Network.Rlpx;
 
 namespace NethermindClusterPlugin;
 
 public class SharedNodeDiscovery(
     string sharedNodesDir,
     string? subnetCidr,
-    IRlpxHost rlpxHost,
+    IEnode enode,
     IIPResolver ipResolver,
     IStaticNodesManager staticNodesManager,
+    ITrustedNodesManager trustedNodesManager,
     IProcessExitSource processExitSource,
     ILogManager logManager)
 {
@@ -88,11 +88,11 @@ public class SharedNodeDiscovery(
         }
         else
         {
-            ip = ipResolver.LocalIp;
+            ip = ipResolver.Resolve(_cts.Token).GetAwaiter().GetResult().LocalIp;
         }
 
-        var publicKey = rlpxHost.LocalNodeId.ToString(false);
-        var port = rlpxHost.LocalPort;
+        var publicKey = enode.PublicKey.ToString(false);
+        var port = enode.Port;
         _ownEnode = $"enode://{publicKey}@{ip}:{port}";
         _ownFilePath = Path.Combine(sharedNodesDir, $"{publicKey}.json");
 
@@ -201,7 +201,7 @@ public class SharedNodeDiscovery(
             return;
         }
 
-        var ownPublicKey = rlpxHost.LocalNodeId.ToString(false);
+        var ownPublicKey = enode.PublicKey.ToString(false);
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var seenEnodes = new HashSet<string>();
 
@@ -234,7 +234,11 @@ public class SharedNodeDiscovery(
 
                     if (!_addedEnodes.Contains(content.Enode))
                     {
-                        if (await staticNodesManager.AddAsync(content.Enode, updateFile: false))
+                        // Register as both a static peer (must-connect) and a trusted peer (never dropped by
+                        // the peer manager), so cluster nodes stay connected regardless of peer-slot pressure.
+                        bool addedStatic = await staticNodesManager.AddAsync(new NetworkNode(content.Enode), updateFile: false);
+                        bool addedTrusted = await trustedNodesManager.AddAsync(new Enode(content.Enode), updateFile: false);
+                        if (addedStatic || addedTrusted)
                         {
                             _addedEnodes.Add(content.Enode);
                             _logger.Info($"[ClusterPlugin] Discovered node: {content.Enode} (total: {_addedEnodes.Count})");
@@ -256,7 +260,9 @@ public class SharedNodeDiscovery(
             {
                 if (!seenEnodes.Contains(enode))
                 {
-                    if (await staticNodesManager.RemoveAsync(enode, updateFile: false))
+                    bool removedStatic = await staticNodesManager.RemoveAsync(new NetworkNode(enode), updateFile: false);
+                    bool removedTrusted = await trustedNodesManager.RemoveAsync(new Enode(enode), updateFile: false);
+                    if (removedStatic || removedTrusted)
                     {
                         _addedEnodes.Remove(enode);
                         _logger.Info($"[ClusterPlugin] Node no longer detected: {enode} (remaining: {_addedEnodes.Count})");

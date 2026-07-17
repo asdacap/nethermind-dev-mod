@@ -1,4 +1,6 @@
 <Solution>
-  <Project Path="../Nethermind/src/Nethermind/Nethermind.Init/Nethermind.Init.csproj" />
+  <Project Path="../../nethermind/src/Nethermind/Nethermind.Init/Nethermind.Init.csproj" />
   <Project Path="../NethermindDevPlugin/NethermindDevPlugin.csproj" />
+  <Project Path="../NethermindFakeColumnsPlugin/NethermindFakeColumnsPlugin.csproj" />
+  <Project Path="../NethermindStateDiffArchivePlugin/NethermindStateDiffArchivePlugin.csproj" />
 </Solution>
